@@ -19,6 +19,7 @@ After the repository has a version tag such as `v1.0.0`, embed the pinned file:
     logo: "M",
     title: "Welcome to My Website",
     primaryColor: "#7c3aed",
+    backgroundColor: "#f8fafc",
     apiUrl: "https://YOUR-BACKEND-DOMAIN.example",
     onVerified: function (data) {
       console.log("Verification response received");
@@ -43,6 +44,7 @@ Version-pinned URLs are recommended for production.
 | `logo` | `"B"` | Text shown inside the logo tile |
 | `title` | `"Verify your email"` | First screen heading |
 | `primaryColor` | `"#2563eb"` | Main button/logo color |
+| `backgroundColor` | `"#ffffff"` | Widget card background color |
 | `apiUrl` | `""` | Backend origin, without a trailing slash |
 | `onVerified` | none | Optional callback called with the verification API response |
 
@@ -58,7 +60,7 @@ Successful responses should be JSON. On errors, return a non-2xx status and opti
 ## Security notes
 
 - Never put SMTP passwords, OTP pepper/secrets, API private keys, or `.env` files in this public repository or in browser JavaScript.
-- Configure the sender name/address and email provider on the backend only. Do not accept sender details from widget options.
+- Configure the sender name/address and email provider on the backend only. Do not accept sender details from widget options. With the provided Node.js backend, set `MAIL_FROM_NAME` and `MAIL_FROM_ADDRESS` in the server environment; `MAIL_FROM_ADDRESS` must be permitted by your email provider (Gmail generally requires your authenticated Gmail address or a verified “Send mail as” alias).
 - Use HTTPS in production, rate-limit code sending and verification, expire codes, and store only a secure hash of codes where appropriate.
 - Return generic responses from the backend where appropriate to reduce email-enumeration risks.
 - This widget displays the verification UI and calls your API; it does not create user accounts or sessions by itself. Your backend must enforce verification before granting access.
