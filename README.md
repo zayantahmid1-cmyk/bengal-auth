@@ -14,12 +14,12 @@ A small, embeddable email one-time-code (OTP) verification UI. It is loaded as a
    node create-bengal-auth.js
    ```
 
-4. The generator creates `backend/server.js`, `backend/.env`, `backend/.gitignore`, and `backend/README.md`. It skips files that already exist.
-5. Open `backend/.env` and replace the example values with your own SMTP settings and a long random `OTP_PEPPER`.
-6. In a terminal, run:
+4. The generator asks where to create the backend files. Enter a folder path, or press Enter to use `./backend` inside the current folder. You can enter an absolute path such as `C:\\Users\\YourName\\Documents\\my-backend`, or a relative path such as `../my-backend`. This lets your website and backend live in separate folders.
+5. It creates `server.js`, `.env`, `.gitignore`, and `README.md` in the selected folder. Existing files are skipped rather than overwritten.
+6. Open the generated `.env` and replace the example values with your own SMTP settings and a long random `OTP_PEPPER`.
+7. Open a terminal in the chosen backend folder and run:
 
    ```bash
-   cd backend
    npm init -y
    npm install express nodemailer dotenv
    node server.js
