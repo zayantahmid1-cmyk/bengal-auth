@@ -17,6 +17,23 @@ A small, embeddable email one-time-code (OTP) verification UI. It is loaded as a
 4. The generator asks where to create the backend files. Enter a folder path, or press Enter to use `./backend` inside the current folder. You can enter an absolute path such as `C:\\Users\\YourName\\Documents\\my-backend`, or a relative path such as `../my-backend`. This lets your website and backend live in separate folders.
 5. It creates `server.js`, `.env`, `.gitignore`, and `README.md` in the selected folder. Existing files are skipped rather than overwritten.
 6. Open the generated `.env` and replace the example values with your own SMTP settings and a long random `OTP_PEPPER`.
+
+### Generate a secure OTP pepper
+
+Generate your own random secret in the backend folder's terminal with Node.js:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Copy the output and put it after `OTP_PEPPER=` in your private `.env` file, for example:
+
+```env
+OTP_PEPPER=paste_your_generated_random_value_here
+```
+
+Replace the example text with the actual output from the command. Do not use the example text as your secret. Keep the pepper private: never commit it to GitHub, include it in frontend HTML/JavaScript, or share it publicly. Keep the same pepper while verification codes are pending; changing it can make existing codes fail validation.
+
 7. Open a terminal in the chosen backend folder and run:
 
    ```bash
@@ -86,7 +103,7 @@ The generated backend implements these routes. It verifies email addresses only;
 - Configure the sender name/address and email provider on the backend only. `MAIL_FROM_ADDRESS` must be permitted by your email provider. Gmail generally requires your authenticated Gmail address or a verified “Send mail as” alias.
 - Use HTTPS in production. The generated starter uses in-memory OTP storage and basic per-email rate limits; add persistent storage, robust abuse protection, and monitoring before production.
 - Set `FRONTEND_ORIGINS` in the backend environment to your website origin(s). Do not leave a wildcard origin for a public production deployment.
-- This widget displays the verification UI and calls your API; it does not create user accounts or sessions by itself.
+- This widget displays the verification UI and calls your API; it does not create user accounts or sessions.
 
 ## License
 
