@@ -5,7 +5,7 @@
     container: "#bengal-auth",
     name: "BENGAL",
     logo: "B",
-    title: "Verify your email",
+    title: "Welcome to BENGAL",
     primaryColor: "#2563eb",
     backgroundColor: "#ffffff",
     apiUrl: ""
@@ -45,6 +45,10 @@
           .bengal-auth-widget .ba-brand{display:flex;align-items:center;gap:11px;margin-bottom:24px}
           .bengal-auth-widget .ba-logo{width:42px;height:42px;border-radius:12px;background:${primaryColor};color:#fff;display:grid;place-items:center;font-size:20px;font-weight:800}
           .bengal-auth-widget .ba-brand-name{font-size:15px;font-weight:750;overflow-wrap:anywhere}
+          .bengal-auth-widget .ba-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;background:#f2f4f7;border-radius:11px;margin-bottom:22px}
+          .bengal-auth-widget .ba-tab{border:0;border-radius:8px;padding:10px;background:transparent;color:#667085;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+          .bengal-auth-widget .ba-tab[aria-selected="true"]{background:#fff;color:#172033;box-shadow:0 1px 3px rgba(16,24,40,.12)}
+          .bengal-auth-widget .ba-form[hidden],.bengal-auth-widget section[hidden]{display:none!important}
           .bengal-auth-widget h2{font-size:24px;line-height:1.25;margin:0 0 8px}
           .bengal-auth-widget .ba-subtitle{font-size:14px;color:#667085;line-height:1.55;margin:0 0 22px}
           .bengal-auth-widget label{display:block;font-size:13px;font-weight:650;margin:0 0 7px}
@@ -63,8 +67,36 @@
             <div class="ba-logo" aria-hidden="true">${escapeHtml(settings.logo)}</div>
             <div class="ba-brand-name">${escapeHtml(settings.name)}</div>
           </div>
-          <section class="ba-step-email">
+          <div class="ba-tabs" role="tablist" aria-label="Account options">
+            <button class="ba-tab" type="button" role="tab" aria-selected="true" data-tab="signup">Sign Up</button>
+            <button class="ba-tab" type="button" role="tab" aria-selected="false" data-tab="login">Log In</button>
+          </div>
+          <section class="ba-auth-signup">
             <h2>${escapeHtml(settings.title)}</h2>
+            <p class="ba-subtitle">Create your account to get started.</p>
+            <form class="ba-form ba-signup-form">
+              <label for="ba-signup-name">Full name</label>
+              <input id="ba-signup-name" name="name" type="text" autocomplete="name" maxlength="100" placeholder="Your name" required>
+              <label for="ba-signup-email">Email address</label>
+              <input id="ba-signup-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+              <label for="ba-signup-password">Password</label>
+              <input id="ba-signup-password" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required>
+              <button class="ba-button" type="submit">Create account</button>
+            </form>
+          </section>
+          <section class="ba-auth-login" hidden>
+            <h2>Welcome back</h2>
+            <p class="ba-subtitle">Log in to your BENGAL account.</p>
+            <form class="ba-form ba-login-form">
+              <label for="ba-login-email">Email address</label>
+              <input id="ba-login-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+              <label for="ba-login-password">Password</label>
+              <input id="ba-login-password" name="password" type="password" autocomplete="current-password" required>
+              <button class="ba-button" type="submit">Log In</button>
+            </form>
+          </section>
+          <section class="ba-step-email" hidden>
+            <h2>Verify your email</h2>
             <p class="ba-subtitle">Enter your email and we’ll send you a one-time verification code.</p>
             <form class="ba-email-form">
               <label for="ba-email">Email address</label>
@@ -89,6 +121,11 @@
 
     const root = container.querySelector(".bengal-auth-widget");
     const emailForm = root.querySelector(".ba-email-form");
+    const signupForm = root.querySelector(".ba-signup-form");
+    const loginForm = root.querySelector(".ba-login-form");
+    const signupStep = root.querySelector(".ba-auth-signup");
+    const loginStep = root.querySelector(".ba-auth-login");
+    const tabs = Array.from(root.querySelectorAll(".ba-tab"));
     const codeForm = root.querySelector(".ba-code-form");
     const emailStep = root.querySelector(".ba-step-email");
     const codeStep = root.querySelector(".ba-step-code");
@@ -116,6 +153,60 @@
       if (!response.ok) throw new Error(data.message || data.error || "Request failed. Please try again.");
       return data;
     }
+
+    function showTab(tabName) {
+      signupStep.hidden = tabName !== "signup";
+      loginStep.hidden = tabName !== "login";
+      emailStep.hidden = true;
+      codeStep.hidden = true;
+      tabs.forEach(function (tab) {
+        tab.setAttribute("aria-selected", String(tab.dataset.tab === tabName));
+      });
+      setMessage("", "");
+    }
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () { showTab(tab.dataset.tab); });
+    });
+
+    async function submitAuthForm(form, endpoint, successText, callbackName) {
+      const button = form.querySelector("button[type=submit]");
+      const values = Object.fromEntries(new FormData(form).entries());
+      if (values.email) values.email = values.email.trim().toLowerCase();
+      button.disabled = true;
+      setMessage("Please wait…", "info");
+      try {
+        const data = await post(endpoint, values);
+        setMessage(data.message || successText, "success");
+        if (callbackName && typeof settings[callbackName] === "function") settings[callbackName](data);
+        if (data.token) {
+          try { root.dispatchEvent(new CustomEvent("bengalauth:authenticated", { detail: data })); } catch (_) {}
+        }
+        if (data.requiresVerification) {
+          currentEmail = values.email || "";
+          emailInput.value = currentEmail;
+          signupStep.hidden = true;
+          loginStep.hidden = true;
+          emailStep.hidden = false;
+          codeStep.hidden = true;
+          root.querySelector(".ba-tabs").hidden = true;
+        }
+      } catch (error) {
+        setMessage(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    signupForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      submitAuthForm(signupForm, "/api/signup", "Account created successfully!", "onSignedUp");
+    });
+
+    loginForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      submitAuthForm(loginForm, "/api/login", "Logged in successfully!", "onLoggedIn");
+    });
 
     function startCountdown(seconds) {
       if (countdownTimer) clearInterval(countdownTimer);
@@ -169,6 +260,8 @@
         resendButton.hidden = true;
         root.querySelector(".ba-back").hidden = true;
         if (typeof settings.onVerified === "function") settings.onVerified(data);
+        root.querySelector(".ba-tabs").hidden = false;
+        showTab("login");
       } catch (error) {
         setMessage(error.message);
       } finally {
@@ -192,11 +285,11 @@
 
     root.querySelector(".ba-back").addEventListener("click", function () {
       if (countdownTimer) clearInterval(countdownTimer);
-      emailStep.hidden = false;
+      emailStep.hidden = true;
       codeStep.hidden = true;
+      root.querySelector(".ba-tabs").hidden = false;
       codeForm.reset();
-      setMessage("", "");
-      emailInput.focus();
+      showTab("signup");
     });
   }
 
