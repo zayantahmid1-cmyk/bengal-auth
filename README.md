@@ -2,7 +2,30 @@
 
 A small, embeddable email one-time-code (OTP) verification UI. It is loaded as a regular JavaScript file and can be styled with a few options.
 
-> **Important:** This repository hosts the browser widget only. The widget needs a separately hosted backend that implements `POST /api/send-code` and `POST /api/verify-code`. A CDN URL by itself does not send email or verify codes.
+> **Important:** The CDN widget cannot create files on a visitor's computer or send email by itself. Use the local setup generator to create a Node.js backend and private environment file.
+
+## Generate the backend and environment file
+
+1. Download or clone this repository to your computer.
+2. Install Node.js 18 or newer.
+3. Open a terminal in the repository folder and run:
+
+   ```bash
+   node create-bengal-auth.js
+   ```
+
+4. The generator creates `backend/server.js`, `backend/.env`, `backend/.gitignore`, and `backend/README.md`. It skips files that already exist.
+5. Open `backend/.env` and replace the example values with your own SMTP settings and a long random `OTP_PEPPER`.
+6. In a terminal, run:
+
+   ```bash
+   cd backend
+   npm init -y
+   npm install express nodemailer dotenv
+   node server.js
+   ```
+
+The generated `.env` is for local development only. Keep it private and never upload it to GitHub. When deploying the backend, set the same variables in your hosting provider's environment-variable settings. The starter stores OTPs and rate limits in memory, so it is for testing, not production use without additional storage and abuse protection.
 
 ## CDN
 
@@ -55,16 +78,15 @@ The widget expects JSON endpoints:
 - `POST /api/send-code` with `{"email":"person@example.com"}`
 - `POST /api/verify-code` with `{"email":"person@example.com","code":"123456"}`
 
-Successful responses should be JSON. On errors, return a non-2xx status and optionally a safe `message` or `error` string. Configure CORS on the backend to allow the website origins that will use the widget.
+The generated backend implements these routes. It verifies email addresses only; it does not create accounts or login sessions.
 
 ## Security notes
 
 - Never put SMTP passwords, OTP pepper/secrets, API private keys, or `.env` files in this public repository or in browser JavaScript.
-- Configure the sender name/address and email provider on the backend only. Do not accept sender details from widget options. With the provided Node.js backend, set `MAIL_FROM_NAME` and `MAIL_FROM_ADDRESS` in the server environment; `MAIL_FROM_ADDRESS` must be permitted by your email provider (Gmail generally requires your authenticated Gmail address or a verified “Send mail as” alias).
-- Use HTTPS in production, rate-limit code sending and verification, expire codes, and store only a secure hash of codes where appropriate.
-- Return generic responses from the backend where appropriate to reduce email-enumeration risks.
-- This widget displays the verification UI and calls your API; it does not create user accounts or sessions by itself. Your backend must enforce verification before granting access.
-- The backend should validate input, implement abuse protections, and use persistent storage appropriate for production. In-memory code storage is suitable only for basic development/testing.
+- Configure the sender name/address and email provider on the backend only. `MAIL_FROM_ADDRESS` must be permitted by your email provider. Gmail generally requires your authenticated Gmail address or a verified “Send mail as” alias.
+- Use HTTPS in production. The generated starter uses in-memory OTP storage and basic per-email rate limits; add persistent storage, robust abuse protection, and monitoring before production.
+- Set `FRONTEND_ORIGINS` in the backend environment to your website origin(s). Do not leave a wildcard origin for a public production deployment.
+- This widget displays the verification UI and calls your API; it does not create user accounts or sessions by itself.
 
 ## License
 
