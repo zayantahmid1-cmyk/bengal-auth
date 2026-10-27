@@ -32,11 +32,12 @@ const app = express();
 app.use(express.json({ limit: "10kb" }));
 const PORT = Number(process.env.PORT || 3000);
 const DB_FILE = path.join(__dirname, "users.json");
+const SESSIONS_FILE = path.join(__dirname, "sessions.json");
 const users = loadUsers();
 const pendingSignups = new Map();
 const codes = new Map();
 const attempts = new Map();
-const sessions = new Map();
+const sessions = loadSessions();
 const CODE_TTL_MS = 10 * 60 * 1000;
 const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || "http://127.0.0.1:5500,http://localhost:5500").split(",").map(x => x.trim()).filter(Boolean);
 
@@ -78,6 +79,22 @@ function saveUsers() {
   fs.writeFileSync(temp, JSON.stringify(users, null, 2), { encoding: "utf8", mode: 0o600 });
   fs.renameSync(temp, DB_FILE);
 }
+function loadSessions() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf8"));
+    const active = Object.entries(parsed).filter(([, session]) => session && session.expiresAt > Date.now());
+    return new Map(active);
+  } catch (error) {
+    if (error.code !== "ENOENT") console.error("Could not read sessions database:", error.message);
+    return new Map();
+  }
+}
+function saveSessions() {
+  const active = Object.fromEntries([...sessions.entries()].filter(([, session]) => session.expiresAt > Date.now()));
+  const temp = SESSIONS_FILE + ".tmp";
+  fs.writeFileSync(temp, JSON.stringify(active, null, 2), { encoding: "utf8", mode: 0o600 });
+  fs.renameSync(temp, SESSIONS_FILE);
+}
 function validEmail(email) {
   return typeof email === "string" && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -101,12 +118,23 @@ function newCode() {
   return String(crypto.randomInt(0, 1000000)).padStart(6, "0");
 }
 async function sendCode(email, code) {
+  const templatePath = path.join(__dirname, "verification-email.html");
+  let html;
+  try {
+    html = fs.readFileSync(templatePath, "utf8")
+      .replace(/{{CODE}}/g, code)
+      .replace(/{{EXPIRY_MINUTES}}/g, String(Math.floor(CODE_TTL_MS / 60000)))
+      .replace(/{{BRAND_NAME}}/g, process.env.MAIL_FROM_NAME || "BENGAL");
+  } catch (error) {
+    console.error("Could not load verification-email.html:", error.message);
+    throw new Error("Email template is missing or unreadable.");
+  }
   await transporter.sendMail({
     from: { name: process.env.MAIL_FROM_NAME || "BENGAL Verification", address: process.env.MAIL_FROM_ADDRESS || process.env.SMTP_USER },
     to: email,
     subject: "Your BENGAL verification code",
-    text: "Your verification code is " + code + ". It expires in 10 minutes.",
-    html: "<p>Your BENGAL verification code is:</p><p style=\"font-size:28px;font-weight:bold;letter-spacing:5px\">" + code + "</p><p>This code expires in 10 minutes.</p>"
+    text: "Your BENGAL verification code is " + code + ". It expires in " + Math.floor(CODE_TTL_MS / 60000) + " minutes. Never share this code.",
+    html
   });
 }
 
@@ -142,8 +170,10 @@ app.post("/api/login", async (req, res) => {
   const expected = Buffer.from(user.passwordHash, "hex");
   if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return res.status(401).json({ message: "Invalid email or password." });
   const token = crypto.randomBytes(32).toString("hex");
-  sessions.set(token, { userId: user.id, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 });
-  return res.json({ token, user: publicUser(user), message: "Logged in successfully!" });
+  sessions.set(token, { userId: user.id, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+  saveSessions();
+  const redirectUrl = process.env.LOGIN_REDIRECT_URL || "/home.html";
+  return res.json({ token, user: publicUser(user), redirectUrl, message: "Logged in successfully!" });
 });
 
 app.post("/api/send-code", async (req, res) => {
@@ -205,10 +235,38 @@ app.post("/api/logout", (req, res) => {
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   sessions.delete(token);
+  saveSessions();
   return res.json({ message: "Logged out." });
 });
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.listen(PORT, () => console.log("BENGAL Auth API listening on port " + PORT));`,
+  "verification-email.html": String.raw`<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>BENGAL verification code</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your BENGAL verification code expires in {{EXPIRY_MINUTES}} minutes.</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f1f5f9;padding:32px 12px;"><tr><td align="center">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
+      <tr><td style="padding:28px 32px;background:#0b1120;color:#ffffff;">
+        <div style="font-size:12px;letter-spacing:4px;font-weight:bold;color:#93c5fd;">WELCOME TO</div>
+        <div style="font-size:30px;font-weight:800;letter-spacing:3px;margin-top:6px;">{{BRAND_NAME}}</div>
+      </td></tr>
+      <tr><td style="padding:34px 32px 18px;">
+        <div style="font-size:23px;font-weight:700;margin-bottom:12px;">Verify your email address</div>
+        <p style="font-size:15px;line-height:1.7;color:#475569;margin:0 0 24px;">Use the secure verification code below to finish creating your account. If you did not request this code, you can safely ignore this email.</p>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;text-align:center;padding:22px 12px;">
+          <div style="font-size:12px;font-weight:bold;letter-spacing:2px;color:#1d4ed8;margin-bottom:10px;">YOUR VERIFICATION CODE</div>
+          <div style="font-size:34px;line-height:1.3;font-weight:800;letter-spacing:9px;color:#0f172a;">{{CODE}}</div>
+        </div>
+        <p style="font-size:13px;line-height:1.7;color:#64748b;margin:20px 0 0;">For your security, this code expires in <strong>{{EXPIRY_MINUTES}} minutes</strong>. Never share it with anyone.</p>
+      </td></tr>
+      <tr><td style="padding:22px 32px 28px;border-top:1px solid #e2e8f0;">
+        <p style="font-size:12px;line-height:1.7;color:#94a3b8;margin:0;">This is an automated message from {{BRAND_NAME}}. Please do not reply to this email.</p>
+      </td></tr>
+    </table>
+    <div style="font-size:11px;color:#94a3b8;padding:18px 12px;">© {{BRAND_NAME}} · Account security</div>
+  </td></tr></table>
+</body></html>`,
   ".env": `SMTP_USER=youraddress@gmail.com
 SMTP_PASS=your_gmail_app_password
 OTP_PEPPER=replace_with_a_long_random_secret
@@ -217,40 +275,40 @@ MAIL_FROM_ADDRESS=youraddress@gmail.com
 SMTP_SERVICE=gmail
 FRONTEND_ORIGINS=http://127.0.0.1:5500,http://localhost:5500
 PORT=3000
+LOGIN_REDIRECT_URL=/home.html
 `,
   ".gitignore": `.env
 node_modules/
 `,
-  "README.md": `# Bengal Auth Backend
+  "README.md": `# BENGAL Auth Backend
 
 ## Requirements
 - Node.js 18 or newer
 - Gmail with 2-Step Verification and a Gmail App Password, or a compatible SMTP provider
 
 ## Install
-Run these commands from this backend folder:
+Run these commands in the generated backend folder:
 
 \`\`\`bash
-npm init -y
 npm install express nodemailer dotenv
 node server.js
 \`\`\`
 
 ## Configure .env
-Edit the generated .env file. Set SMTP_USER to your sender account, SMTP_PASS to your provider's app password, and OTP_PEPPER to a long random secret. Never share or commit .env. MAIL_FROM_ADDRESS should be an address your email provider permits.
+Set SMTP_USER and SMTP_PASS to your real SMTP credentials, and set OTP_PEPPER to a long random secret. Never share or commit .env.
 
-Set FRONTEND_ORIGINS to your website origin(s), separated by commas. For local VS Code Live Server, the default ports are examples; change them to match your local URL. For production, use your real website origin and HTTPS.
+Set LOGIN_REDIRECT_URL to the destination after successful login, such as /dashboard.html or https://your-site.example/dashboard. Set FRONTEND_ORIGINS to your frontend origin(s), separated by commas.
 
-## Widget
-Set BengalAuth.init({ apiUrl: "http://localhost:3000" }) while testing locally. Once deployed, replace it with your backend's HTTPS URL.
+## Customize the verification email
+Edit verification-email.html. It is an HTML email template. Keep these placeholders so the server can fill them in:
+- {{CODE}} — the 6-digit code
+- {{EXPIRY_MINUTES}} — how long the code remains valid
+- {{BRAND_NAME}} — the configured brand/sender name
 
-## API
-- POST /api/send-code with JSON { "email": "person@example.com" }
-- POST /api/verify-code with JSON { "email": "person@example.com", "code": "123456" }
-- GET /health
+Email apps may display HTML differently, so use inline styles and table-based layout for compatibility.
 
-## Important limitations
-This starter stores codes and rate limits in memory, so a restart clears them and it is not production-ready for multiple instances. Add persistent storage, distributed rate limiting, monitoring, and stronger abuse protection before production. A verified email response does not create an account or establish a login session; implement those separately if needed.
+## Important
+User accounts are saved in users.json and sessions in sessions.json; login sessions expire after 30 days. Verification codes and rate limits remain in memory and are cleared when the server restarts. This starter is for development, not production deployment. Use HTTPS and a proper database before production.
 `
   };
 
