@@ -124,7 +124,7 @@ async function sendCode(email, code) {
     html = fs.readFileSync(templatePath, "utf8")
       .replace(/{{CODE}}/g, code)
       .replace(/{{EXPIRY_MINUTES}}/g, String(Math.floor(CODE_TTL_MS / 60000)))
-      .replace(/{{BRAND_NAME}}/g, process.env.MAIL_FROM_NAME || "BENGAL");
+      .replace(/{{BRAND_NAME}}/g, process.env.MAIL_BRAND_NAME || "BENGAL");
   } catch (error) {
     console.error("Could not load verification-email.html:", error.message);
     throw new Error("Email template is missing or unreadable.");
@@ -271,6 +271,7 @@ app.listen(PORT, () => console.log("BENGAL Auth API listening on port " + PORT))
 SMTP_PASS=your_gmail_app_password
 OTP_PEPPER=replace_with_a_long_random_secret
 MAIL_FROM_NAME=BENGAL Verification
+MAIL_BRAND_NAME=BENGAL
 MAIL_FROM_ADDRESS=youraddress@gmail.com
 SMTP_SERVICE=gmail
 FRONTEND_ORIGINS=http://127.0.0.1:5500,http://localhost:5500
