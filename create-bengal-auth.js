@@ -1,10 +1,26 @@
 const fs = require("fs");
 const path = require("path");
+const readline = require("readline");
 
-const backendDir = path.join(process.cwd(), "backend");
-fs.mkdirSync(backendDir, { recursive: true });
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-const files = {
+rl.question("Where should the backend files be created?\nEnter a folder path (or press Enter for ./backend): ", answer => {
+  rl.close();
+
+  const chosenPath = answer.trim();
+  const backendDir = path.resolve(process.cwd(), chosenPath || "backend");
+
+  try {
+    fs.mkdirSync(backendDir, { recursive: true });
+    generateFiles(backendDir);
+  } catch (error) {
+    console.error("Could not create backend files:", error.message);
+    process.exitCode = 1;
+  }
+});
+
+function generateFiles(backendDir) {
+  const files = {
   "server.js": String.raw`require("dotenv").config();
 const express = require("express");
 const nodemailer = require("nodemailer");
@@ -17,7 +33,6 @@ const PORT = Number(process.env.PORT || 3000);
 const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || "")
   .split(",").map(x => x.trim()).filter(Boolean);
 
-// Small CORS allowlist. Set FRONTEND_ORIGINS to your website origin(s).
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && (FRONTEND_ORIGINS.includes(origin) || FRONTEND_ORIGINS.includes("*"))) {
@@ -85,7 +100,7 @@ app.post("/api/send-code", async (req, res) => {
       to: email,
       subject: "Your email verification code",
       text: "Your verification code is " + code + ". It expires in 10 minutes.",
-      html: "<p>Your verification code is:</p><p style=\"font-size:28px;font-weight:bold;letter-spacing:5px\">" +
+      html: "<p>Your verification code is:</p><p style=\\"font-size:28px;font-weight:bold;letter-spacing:5px\\">" +
         code + "</p><p>This code expires in 10 minutes. If you did not request it, ignore this email.</p>"
     });
     return res.json({ message: "If the address is valid, a verification code has been sent." });
@@ -169,16 +184,18 @@ Set BengalAuth.init({ apiUrl: "http://localhost:3000" }) while testing locally. 
 ## Important limitations
 This starter stores codes and rate limits in memory, so a restart clears them and it is not production-ready for multiple instances. Add persistent storage, distributed rate limiting, monitoring, and stronger abuse protection before production. A verified email response does not create an account or establish a login session; implement those separately if needed.
 `
-};
+  };
 
-for (const [name, data] of Object.entries(files)) {
-  const target = path.join(backendDir, name);
-  if (fs.existsSync(target)) {
-    console.log("Skipped existing file:", path.relative(process.cwd(), target));
-    continue;
+  for (const [name, data] of Object.entries(files)) {
+    const target = path.join(backendDir, name);
+    if (fs.existsSync(target)) {
+      console.log("Skipped existing file:", target);
+      continue;
+    }
+    fs.writeFileSync(target, data, { encoding: "utf8", flag: "wx" });
+    console.log("Created:", target);
   }
-  fs.writeFileSync(target, data, { encoding: "utf8", flag: "wx" });
-  console.log("Created:", path.relative(process.cwd(), target));
-}
 
-console.log("\nNext: cd backend, review .env, then run npm init -y && npm install express nodemailer dotenv");
+  console.log("\nBackend folder:", backendDir);
+  console.log("Next: open a terminal in that folder, then run npm init -y && npm install express nodemailer dotenv");
+}
