@@ -7,6 +7,7 @@
     logo: "B",
     title: "Verify your email",
     primaryColor: "#2563eb",
+    backgroundColor: "#ffffff",
     apiUrl: ""
   };
 
@@ -31,13 +32,16 @@
     const primaryColor = /^#[0-9a-f]{3,8}$/i.test(settings.primaryColor)
       ? settings.primaryColor
       : defaults.primaryColor;
+    const backgroundColor = /^#[0-9a-f]{3,8}$/i.test(settings.backgroundColor)
+      ? settings.backgroundColor
+      : defaults.backgroundColor;
 
     container.innerHTML = `
       <div class="bengal-auth-widget">
         <style>
           .bengal-auth-widget{font-family:Inter,Arial,sans-serif;color:#172033;max-width:420px;width:100%;margin:0 auto}
           .bengal-auth-widget *{box-sizing:border-box}
-          .bengal-auth-widget .ba-card{background:#fff;border:1px solid #e7eaf0;border-radius:18px;padding:28px;box-shadow:0 12px 36px rgba(20,35,70,.08)}
+          .bengal-auth-widget .ba-card{background:${backgroundColor};border:1px solid #e7eaf0;border-radius:18px;padding:28px;box-shadow:0 12px 36px rgba(20,35,70,.08)}
           .bengal-auth-widget .ba-brand{display:flex;align-items:center;gap:11px;margin-bottom:24px}
           .bengal-auth-widget .ba-logo{width:42px;height:42px;border-radius:12px;background:${primaryColor};color:#fff;display:grid;place-items:center;font-size:20px;font-weight:800}
           .bengal-auth-widget .ba-brand-name{font-size:15px;font-weight:750;overflow-wrap:anywhere}
